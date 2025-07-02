@@ -1,103 +1,203 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
+
+export default function TicketSolverPage() {
+  const [lang, setLang] = useState<'en' | 'es'>('en');
+
+  const [form, setForm] = useState({
+    fullName: '',
+    dateOfBirth: '',
+    email: '',
+    phoneNumber: '',
+    ticketNumber: '',
+    date: '',
+    licensePlate: '',
+    city: '',
+    file: null as File | null,
+  });
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, files } = e.target;
+    if (name === 'file') {
+      setForm((prev) => ({ ...prev, file: files?.[0] || null }));
+    } else {
+      setForm((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const required = ['fullName', 'dateOfBirth', 'ticketNumber', 'date', 'licensePlate', 'city'];
+    for (const field of required) {
+      if (!form[field as keyof typeof form]) {
+        alert(lang === 'en' ? 'Please fill in all required fields.' : 'Por favor complete todos los campos requeridos.');
+        return;
+      }
+    }
+
+    let fileUrl = '';
+    if (form.file) {
+      const cleanFileName = form.file.name.replace(/[^a-z0-9.\-_]/gi, '_');
+      const filePath = `uploads/${Date.now()}_${cleanFileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('tickets')
+        .upload(filePath, form.file, {
+          contentType: form.file.type,
+        });
+
+      if (uploadError) {
+        console.error('❌ Upload Error:', uploadError.message ?? uploadError);
+        alert('Failed to upload the file.');
+        return;
+      }
+
+      const { data } = supabase.storage.from('tickets').getPublicUrl(filePath);
+      fileUrl = data.publicUrl;
+    }
+
+    const { error } = await supabase.from('tickets').insert([
+      {
+        full_name: form.fullName,
+        date_of_birth: form.dateOfBirth,
+        email: form.email,
+        phone_number: form.phoneNumber,
+        ticket_number: form.ticketNumber,
+        violation_date: form.date,
+        license_plate: form.licensePlate,
+        city: form.city,
+        status: 'Pending',
+        notified_email: false,
+        notified_sms: false,
+        file_url: fileUrl,
+      },
+    ]);
+
+    if (error) {
+      console.error('❌ Supabase Error:', error);
+      alert(lang === 'en' ? 'Submission failed. Try again.' : 'Error al enviar. Intenta de nuevo.');
+      return;
+    }
+
+    try {
+      await fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email, status: 'Received' }),
+      });
+    } catch (err) {
+      console.error('❌ Notification Error:', err);
+    }
+
+    try {
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: form.email }),
+      });
+      const sessionData = await res.json();
+      if (!sessionData.url) throw new Error('No URL returned from Stripe.');
+      window.location.href = sessionData.url;
+    } catch (err) {
+      console.error('❌ Stripe error:', err);
+      alert(lang === 'en' ? 'Payment session failed.' : 'La sesión de pago falló.');
+    }
+  };
+
+  const t = {
+    heading: lang === 'en'
+      ? 'Solve Your Parking Ticket in Minutes for only $99'
+      : 'Resuelve tu multa de estacionamiento en minutos por solo $99',
+    subheading: lang === 'en'
+      ? 'Upload your ticket. Pay the service fee. Let our legal team handle the rest.'
+      : 'Sube tu multa. Paga la tarifa. Nuestro equipo legal se encargará del resto.',
+    fields: {
+      fullName: lang === 'en' ? 'Full Name' : 'Nombre completo',
+      dateOfBirth: lang === 'en' ? 'Date of Birth' : 'Fecha de nacimiento',
+      email: lang === 'en' ? 'Your Email' : 'Tu correo electrónico',
+      phoneNumber: lang === 'en' ? 'Phone Number' : 'Número de teléfono',
+      ticketNumber: lang === 'en' ? 'Ticket Number' : 'Número de multa',
+      date: lang === 'en' ? 'Violation Date' : 'Fecha de infracción',
+      licensePlate: lang === 'en' ? 'License Plate' : 'Placa del vehículo',
+      city: lang === 'en' ? 'City' : 'Ciudad',
+      file: lang === 'en' ? 'Upload Ticket (Image or PDF)' : 'Sube la multa (imagen o PDF)',
+    },
+    button: lang === 'en' ? 'Continue to Payment' : 'Continuar al pago',
+    statusButton: lang === 'en' ? 'Check Ticket Status' : 'Ver estado de tu multa',
+    footer: lang === 'en' ? 'All rights reserved.' : 'Todos los derechos reservados.',
+    toggleLang: lang === 'en' ? 'Español' : 'English',
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="min-h-screen bg-gradient-to-br from-blue-50 to-white flex flex-col items-center">
+      <section className="flex-grow w-full max-w-xl px-6 py-10">
+        <div className="bg-white shadow-lg rounded-2xl p-8">
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={() => setLang(lang === 'en' ? 'es' : 'en')}
+              className="text-sm text-blue-600 hover:underline font-medium"
+            >
+              {t.toggleLang}
+            </button>
+          </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">{t.heading}</h2>
+          <p className="text-gray-500 mb-6">{t.subheading}</p>
+
+          <div className="mt-4 mb-6 text-center">
+            <a
+              href="/status"
+              className="inline-block px-6 py-3 text-sm font-semibold bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition duration-200"
+            >
+              🔍 {t.statusButton}
+            </a>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {Object.entries(t.fields).map(([key, label]) =>
+              key === 'file' ? (
+                <div key={key}>
+                  <label className="block text-sm font-medium text-gray-700">{label}</label>
+                  <input
+                    type="file"
+                    name="file"
+                    accept=".jpg,.jpeg,.png,.pdf"
+                    onChange={handleChange}
+                    required
+                    className="text-black mt-1 w-full rounded-md border border-gray-300 shadow-sm"
+                  />
+                </div>
+              ) : (
+                <div key={key}>
+                  <label className="block text-sm font-medium text-gray-700">{label}</label>
+                  <input
+                    type={key === 'date' || key === 'dateOfBirth' ? 'date' : 'text'}
+                    name={key}
+                    value={form[key as keyof typeof form] as string}
+                    onChange={handleChange}
+                    required={['fullName', 'dateOfBirth', 'ticketNumber', 'date', 'licensePlate', 'city'].includes(key)}
+                    className="text-black mt-1 w-full rounded-md border border-gray-300 shadow-sm"
+                  />
+                </div>
+              )
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-xl shadow-lg"
+            >
+              🚀 {t.button}
+            </button>
+          </form>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </section>
+
+      <footer className="w-full text-center py-4 text-sm text-gray-400 border-t mt-10">
+        &copy; {new Date().getFullYear()} TicketSolver — {t.footer}
       </footer>
-    </div>
+    </main>
   );
 }
