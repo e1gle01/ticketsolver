@@ -1,18 +1,12 @@
 // app/404.tsx
-'use client';
-
-import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
-
-function SearchParamsReader() {
-  const params = useSearchParams();
-  return <p>Page not found. (Search param: {params.get('q') ?? 'none'})</p>;
-}
-
 export default function NotFoundPage() {
-  return (
-    <Suspense fallback={<p>Loading 404...</p>}>
-      <SearchParamsReader />
-    </Suspense>
-  );
-}
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center text-center">
+        <h1 className="text-3xl font-bold mb-4">404 – Page Not Found</h1>
+        <p className="text-lg text-gray-600">
+          The page you're looking for doesn't exist or has been moved.
+        </p>
+      </div>
+    );
+  }
+  
